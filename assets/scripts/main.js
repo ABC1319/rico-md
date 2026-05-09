@@ -36,6 +36,7 @@ const activeDocumentId = ref(null);
 const currentDocumentTitle = ref('');
 const documentSearch = ref('');
 const previewMode = ref('desktop');
+const tocVisible = ref(false);
 const isDraggingOver = ref(false);
 const copySuccess = ref(false);
 
@@ -89,6 +90,21 @@ const filteredDocuments = computed(() => {
       if (a.sortOrder !== b.sortOrder) return a.sortOrder - b.sortOrder;
       return a.createdAt - b.createdAt;
     });
+});
+
+const tocItems = computed(() => {
+  if (!renderedContent.value) return [];
+
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(renderedContent.value, 'text/html');
+
+  return Array.from(doc.querySelectorAll('h1, h2, h3'))
+    .map((heading) => ({
+      id: heading.getAttribute('id') || '',
+      level: Number(heading.tagName.slice(1)),
+      text: (heading.textContent || '').trim()
+    }))
+    .filter((item) => item.id && item.text);
 });
 
 function createDocumentId(prefix = 'doc') {
@@ -223,7 +239,8 @@ function buildSavePayload() {
     content: activeDoc ? activeDoc.content : markdownInput.value,
     documents: documents.value,
     activeDocumentId: activeDocumentId.value,
-    codeBlockSettings: codeBlockSettings.value
+    codeBlockSettings: codeBlockSettings.value,
+    tocVisible: tocVisible.value
   };
 }
 
@@ -245,7 +262,8 @@ function persistDocumentState() {
     getActiveDocument()?.content || markdownInput.value,
     documents.value,
     activeDocumentId.value,
-    codeBlockSettings.value
+    codeBlockSettings.value,
+    tocVisible.value
   );
 
   if (success) {
@@ -283,6 +301,26 @@ function updateStats() {
 
 function getResolvedCodeTheme() {
   return resolveCodeTheme(currentCodeTheme.value);
+}
+
+function toggleToc() {
+  tocVisible.value = !tocVisible.value;
+  persistDocumentState();
+}
+
+function scrollToTocHeading(id) {
+  if (!id) return;
+
+  nextTick(() => {
+    const preview = document.querySelector('.preview-content');
+    const heading = document.getElementById(id);
+    if (!preview || !heading) return;
+
+    const previewRect = preview.getBoundingClientRect();
+    const headingRect = heading.getBoundingClientRect();
+    const offset = headingRect.top - previewRect.top + preview.scrollTop - 16;
+    preview.scrollTo({ top: Math.max(0, offset), behavior: 'smooth' });
+  });
 }
 
 async function renderMarkdown() {
@@ -1018,6 +1056,7 @@ const app = createApp({
       const preferences = loadPreferences();
       currentStyle.value = preferences.currentStyle;
       codeBlockSettings.value = preferences.codeBlockSettings;
+      tocVisible.value = preferences.tocVisible;
 
       try {
         const savedCodeTheme = localStorage.getItem('currentCodeTheme');
@@ -1070,6 +1109,8 @@ const app = createApp({
       documentSearch,
       filteredDocuments,
       previewMode,
+      tocVisible,
+      tocItems,
       isDraggingOver,
       copySuccess,
       activePanel,
@@ -1089,6 +1130,8 @@ const app = createApp({
       codeBlockSettings,
       STYLES,
       renderMarkdown,
+      toggleToc,
+      scrollToTocHeading,
       doCopy,
       copyToTwitter,
       onPaste,

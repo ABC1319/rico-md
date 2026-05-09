@@ -52,6 +52,7 @@ function applyInlineStyles(html, styleConfig, codeTheme) {
 
   annotateMathFormulaNodes(doc);
   groupConsecutiveImages(doc);
+  assignHeadingIds(doc);
 
   Object.keys(style).forEach((selector) => {
     if (selector === 'container' || selector === 'pre' || selector === 'code' || selector === 'pre code') return;
@@ -73,6 +74,40 @@ function applyInlineStyles(html, styleConfig, codeTheme) {
   container.setAttribute('style', style.container);
   container.innerHTML = doc.body.innerHTML;
   return container.outerHTML;
+}
+
+function assignHeadingIds(doc) {
+  const headings = Array.from(doc.querySelectorAll('h1, h2, h3'));
+  const idCounts = new Map();
+  const usedIds = new Set();
+
+  headings.forEach((heading) => {
+    const text = (heading.textContent || '').trim();
+    const preferredId = heading.getAttribute('id') || createHeadingSlug(text);
+    let count = idCounts.get(preferredId) || 0;
+    let id = count === 0 ? preferredId : `${preferredId}-${count + 1}`;
+
+    while (usedIds.has(id)) {
+      count += 1;
+      id = `${preferredId}-${count + 1}`;
+    }
+
+    idCounts.set(preferredId, count + 1);
+    usedIds.add(id);
+    heading.setAttribute('id', id);
+  });
+}
+
+function createHeadingSlug(text) {
+  const normalized = String(text || '')
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, '-')
+    .replace(/[^\w\u3400-\u4dbf\u4e00-\u9fff-]+/g, '')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '');
+
+  return normalized || 'heading';
 }
 
 function annotateMathFormulaNodes(doc) {

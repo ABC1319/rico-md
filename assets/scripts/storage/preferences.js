@@ -9,6 +9,7 @@ const KEY_CONTENT = 'markdownInput';
 const KEY_DOCUMENTS = 'documents';
 const KEY_ACTIVE_DOCUMENT_ID = 'activeDocumentId';
 const KEY_CODE_BLOCK_SETTINGS = 'codeBlockSettings';
+const KEY_TOC_VISIBLE = 'tocVisible';
 
 const DEFAULT_CODE_BLOCK_SETTINGS = {
   showLanguageLabel: true,
@@ -71,7 +72,8 @@ export function loadPreferences() {
       content: localStorage.getItem(KEY_CONTENT),
       documents: normalizeDocuments(parseJSON(localStorage.getItem(KEY_DOCUMENTS), [])),
       activeDocumentId: localStorage.getItem(KEY_ACTIVE_DOCUMENT_ID),
-      codeBlockSettings: normalizeCodeBlockSettings(parseJSON(localStorage.getItem(KEY_CODE_BLOCK_SETTINGS), null))
+      codeBlockSettings: normalizeCodeBlockSettings(parseJSON(localStorage.getItem(KEY_CODE_BLOCK_SETTINGS), null)),
+      tocVisible: localStorage.getItem(KEY_TOC_VISIBLE) === 'true'
     };
   } catch (_error) {
     return {
@@ -79,15 +81,17 @@ export function loadPreferences() {
       content: null,
       documents: [],
       activeDocumentId: null,
-      codeBlockSettings: { ...DEFAULT_CODE_BLOCK_SETTINGS }
+      codeBlockSettings: { ...DEFAULT_CODE_BLOCK_SETTINGS },
+      tocVisible: false
     };
   }
 }
 
-export function savePreferences(currentStyle, content, documents = null, activeDocumentId = null, codeBlockSettings = null) {
+export function savePreferences(currentStyle, content, documents = null, activeDocumentId = null, codeBlockSettings = null, tocVisible = false) {
   try {
     localStorage.setItem(KEY_STYLE, currentStyle);
     localStorage.setItem(KEY_CONTENT, content);
+    localStorage.setItem(KEY_TOC_VISIBLE, tocVisible ? 'true' : 'false');
 
     if (Array.isArray(documents)) {
       localStorage.setItem(KEY_DOCUMENTS, JSON.stringify(documents));
@@ -119,10 +123,11 @@ export function debounceSaveContent(payload, delay = 1000, callbacks = {}) {
       content = '',
       documents = null,
       activeDocumentId = null,
-      codeBlockSettings = null
+      codeBlockSettings = null,
+      tocVisible = false
     } = payload || {};
 
-    const success = savePreferences(currentStyle, content, documents, activeDocumentId, codeBlockSettings);
+    const success = savePreferences(currentStyle, content, documents, activeDocumentId, codeBlockSettings, tocVisible);
 
     if (success) {
       callbacks.onSuccess?.(payload);

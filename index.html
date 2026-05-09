@@ -209,15 +209,20 @@
       <div class="preview-panel">
         <div class="preview-composer">
             <div class="preview-toolbar">
-              <div class="device-toggle">
-                <button class="device-toggle-btn" :class="{ active: previewMode === 'mobile' }" @click="previewMode = 'mobile'" title="手机预览">
-                  <svg class="lucide lucide-smartphone" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"></rect><path d="M12 18h.01"></path></svg>
-                </button>
-                <button class="device-toggle-btn" :class="{ active: previewMode === 'tablet' }" @click="previewMode = 'tablet'" title="iPad 预览">
-                  <svg class="lucide lucide-tablet" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="2" width="16" height="20" rx="2" ry="2"></rect><path d="M12 18h.01"></path></svg>
-                </button>
-                <button class="device-toggle-btn" :class="{ active: previewMode === 'desktop' }" @click="previewMode = 'desktop'" title="桌面预览">
-                  <svg class="lucide lucide-monitor" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="3" width="20" height="14" rx="2"></rect><path d="M8 21h8"></path><path d="M12 17v4"></path></svg>
+              <div class="preview-toolbar-left">
+                <div class="device-toggle">
+                  <button class="device-toggle-btn" :class="{ active: previewMode === 'mobile' }" @click="previewMode = 'mobile'" title="手机预览">
+                    <svg class="lucide lucide-smartphone" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"></rect><path d="M12 18h.01"></path></svg>
+                  </button>
+                  <button class="device-toggle-btn" :class="{ active: previewMode === 'tablet' }" @click="previewMode = 'tablet'" title="iPad 预览">
+                    <svg class="lucide lucide-tablet" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="2" width="16" height="20" rx="2" ry="2"></rect><path d="M12 18h.01"></path></svg>
+                  </button>
+                  <button class="device-toggle-btn" :class="{ active: previewMode === 'desktop' }" @click="previewMode = 'desktop'" title="桌面预览">
+                    <svg class="lucide lucide-monitor" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="3" width="20" height="14" rx="2"></rect><path d="M8 21h8"></path><path d="M12 17v4"></path></svg>
+                  </button>
+                </div>
+                <button class="device-toggle-btn toc-toggle-btn" :class="{ active: tocVisible }" @click="toggleToc" title="内容目录">
+                  <svg class="lucide lucide-list-tree" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 6H8"></path><path d="M21 12h-8"></path><path d="M21 18h-8"></path><path d="M3 6h1"></path><path d="M3 12h1"></path><path d="M3 18h1"></path></svg>
                 </button>
               </div>
 
@@ -232,13 +237,30 @@
               </div>
             </div>
 
-            <div class="preview-content">
+            <div class="preview-content" :class="{ 'toc-open': tocVisible && renderedContent }">
               <div v-if="!renderedContent" class="empty-state">
                 <svg class="lucide lucide-file-pen-line empty-state-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h-6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8l6 6v3"></path><path d="M14 2v6h6"></path><path d="M15 18.5 18.5 15"></path><path d="M18 14.5 20.5 17"></path><path d="M13 20l1.5-4.5"></path></svg>
                 <h3>开始编辑</h3>
                 <p>左侧输入 Markdown，右侧实时预览。</p>
               </div>
-              <div v-else class="preview-container" :class="{ 'mobile-mode': previewMode === 'mobile', 'tablet-mode': previewMode === 'tablet' }" v-html="renderedContent"></div>
+              <template v-else>
+                <div class="preview-container" :class="{ 'mobile-mode': previewMode === 'mobile', 'tablet-mode': previewMode === 'tablet' }" v-html="renderedContent"></div>
+                <aside v-if="tocVisible" class="preview-toc" aria-label="内容目录">
+                  <div class="preview-toc-title">目录</div>
+                  <div v-if="tocItems.length" class="preview-toc-list">
+                    <button
+                      v-for="item in tocItems"
+                      :key="item.id"
+                      class="preview-toc-item"
+                      :class="'level-' + item.level"
+                      @click="scrollToTocHeading(item.id)"
+                    >
+                      {{ item.text }}
+                    </button>
+                  </div>
+                  <p v-else class="preview-toc-empty">暂无 H1-H3 标题</p>
+                </aside>
+              </template>
             </div>
         </div>
       </div>
