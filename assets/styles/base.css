@@ -105,7 +105,8 @@
 
   /* ── Preview ── */
   --preview-width-mobile: 402px;
-  --preview-width-desktop: 720px;
+  --preview-width-tablet: 750px;
+  --preview-width-desktop: 100%;
 }
 
 /* ── Reset ── */

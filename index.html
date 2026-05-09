@@ -213,6 +213,9 @@
                 <button class="device-toggle-btn" :class="{ active: previewMode === 'mobile' }" @click="previewMode = 'mobile'" title="手机预览">
                   <svg class="lucide lucide-smartphone" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"></rect><path d="M12 18h.01"></path></svg>
                 </button>
+                <button class="device-toggle-btn" :class="{ active: previewMode === 'tablet' }" @click="previewMode = 'tablet'" title="iPad 预览">
+                  <svg class="lucide lucide-tablet" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="2" width="16" height="20" rx="2" ry="2"></rect><path d="M12 18h.01"></path></svg>
+                </button>
                 <button class="device-toggle-btn" :class="{ active: previewMode === 'desktop' }" @click="previewMode = 'desktop'" title="桌面预览">
                   <svg class="lucide lucide-monitor" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="3" width="20" height="14" rx="2"></rect><path d="M8 21h8"></path><path d="M12 17v4"></path></svg>
                 </button>
@@ -235,7 +238,7 @@
                 <h3>开始编辑</h3>
                 <p>左侧输入 Markdown，右侧实时预览。</p>
               </div>
-              <div v-else class="preview-container" :class="{ 'mobile-mode': previewMode === 'mobile' }" v-html="renderedContent"></div>
+              <div v-else class="preview-container" :class="{ 'mobile-mode': previewMode === 'mobile', 'tablet-mode': previewMode === 'tablet' }" v-html="renderedContent"></div>
             </div>
         </div>
       </div>
