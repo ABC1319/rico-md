@@ -206,12 +206,154 @@ function toWechatCodeHTML(codeText) {
 
 function flattenListItems(doc) {
   doc.querySelectorAll('li').forEach((item) => {
+    if (containsRenderableMath(item)) {
+      return;
+    }
+
     const clone = item.cloneNode(true);
     replaceFormulaNodesWithPlainText(clone);
     const text = (clone.textContent || '').replace(/\s+/g, ' ').trim();
     item.innerHTML = '';
     item.textContent = text;
   });
+}
+
+function containsRenderableMath(node) {
+  if (!node?.querySelector) return false;
+  return Boolean(
+    node.querySelector('[data-formula-plain], [data-formula-source], .katex, .katex-display, .MathJax, mjx-container')
+  );
+}
+
+function convertOrderedListsToWechatParagraphs(doc, styleConfig) {
+  const orderedLists = Array.from(doc.querySelectorAll('ol'));
+  orderedLists.forEach((list) => {
+    const items = Array.from(list.children).filter((child) => child.tagName?.toUpperCase() === 'LI');
+    if (items.length === 0) {
+      list.remove();
+      return;
+    }
+
+    const fragment = doc.createDocumentFragment();
+    items.forEach((item, index) => {
+      fragment.appendChild(buildWechatOrderedParagraph(doc, item, index + 1, styleConfig));
+    });
+
+    list.parentNode.replaceChild(fragment, list);
+  });
+}
+
+function buildWechatOrderedParagraph(doc, item, order, styleConfig) {
+  const paragraph = doc.createElement('p');
+  const prefix = doc.createElement('span');
+  const clonedItem = item.cloneNode(true);
+  const containerStyle = styleConfig?.styles?.container || '';
+  const paragraphStyle = styleConfig?.styles?.p || '';
+  const listItemStyle = styleConfig?.styles?.li || '';
+
+  prefix.textContent = `${order}. `;
+  prefix.setAttribute(
+    'style',
+    'display: inline !important; white-space: nowrap !important;'
+  );
+
+  if (!containsRenderableMath(clonedItem)) {
+    replaceFormulaNodesWithPlainText(clonedItem);
+    const text = (clonedItem.textContent || '').replace(/\s+/g, ' ').trim();
+    clonedItem.innerHTML = '';
+    clonedItem.textContent = text;
+  }
+
+  paragraph.setAttribute(
+    'style',
+    mergeStyleText(
+      buildTypographyStyle({
+        fontSize: extractStyleValue(listItemStyle, 'font-size')
+          || extractStyleValue(paragraphStyle, 'font-size')
+          || extractStyleValue(containerStyle, 'font-size'),
+        lineHeight: extractStyleValue(listItemStyle, 'line-height')
+          || extractStyleValue(paragraphStyle, 'line-height')
+          || extractStyleValue(containerStyle, 'line-height'),
+        color: extractStyleValue(listItemStyle, 'color')
+          || extractStyleValue(paragraphStyle, 'color')
+          || extractStyleValue(containerStyle, 'color'),
+        fontFamily: extractStyleValue(listItemStyle, 'font-family')
+          || extractStyleValue(paragraphStyle, 'font-family')
+          || extractStyleValue(containerStyle, 'font-family')
+      }),
+      'margin: 0 0 14px !important; white-space: normal !important; word-break: break-word !important; overflow-wrap: anywhere !important;'
+    )
+  );
+
+  paragraph.appendChild(prefix);
+  while (clonedItem.firstChild) {
+    paragraph.appendChild(clonedItem.firstChild);
+  }
+  return paragraph;
+}
+
+function normalizeListTypographyForWechat(doc, styleConfig) {
+  const containerStyle = styleConfig?.styles?.container || '';
+  const paragraphStyle = styleConfig?.styles?.p || '';
+  const listItemStyle = styleConfig?.styles?.li || '';
+  const listStyle = [styleConfig?.styles?.ol || '', styleConfig?.styles?.ul || ''].join('; ');
+
+  const fontSize = extractStyleValue(listItemStyle, 'font-size')
+    || extractStyleValue(paragraphStyle, 'font-size')
+    || extractStyleValue(containerStyle, 'font-size');
+  const lineHeight = extractStyleValue(listItemStyle, 'line-height')
+    || extractStyleValue(paragraphStyle, 'line-height')
+    || extractStyleValue(containerStyle, 'line-height');
+  const color = extractStyleValue(listItemStyle, 'color')
+    || extractStyleValue(paragraphStyle, 'color')
+    || extractStyleValue(containerStyle, 'color');
+  const fontFamily = extractStyleValue(listItemStyle, 'font-family')
+    || extractStyleValue(paragraphStyle, 'font-family')
+    || extractStyleValue(containerStyle, 'font-family');
+
+  doc.querySelectorAll('ol, ul').forEach((list) => {
+    const currentStyle = list.getAttribute('style') || '';
+    list.setAttribute(
+      'style',
+      mergeStyleText(currentStyle, buildTypographyStyle({
+        fontSize,
+        lineHeight,
+        color,
+        fontFamily
+      }), listStyle)
+    );
+  });
+
+  doc.querySelectorAll('li').forEach((item) => {
+    const currentStyle = item.getAttribute('style') || '';
+    item.setAttribute(
+      'style',
+      mergeStyleText(currentStyle, buildTypographyStyle({
+        fontSize,
+        lineHeight,
+        color,
+        fontFamily
+      }))
+    );
+  });
+}
+
+function buildTypographyStyle({ fontSize, lineHeight, color, fontFamily }) {
+  const declarations = [];
+  if (fontSize) declarations.push(`font-size: ${fontSize} !important;`);
+  if (lineHeight) declarations.push(`line-height: ${lineHeight} !important;`);
+  if (color) declarations.push(`color: ${color} !important;`);
+  if (fontFamily) declarations.push(`font-family: ${fontFamily} !important;`);
+  return declarations.join(' ');
+}
+
+function mergeStyleText(...parts) {
+  return parts
+    .filter(Boolean)
+    .map((part) => String(part).trim())
+    .filter(Boolean)
+    .join(' ')
+    .trim();
 }
 
 function normalizeBlockquotes(doc) {
@@ -329,6 +471,8 @@ export async function copyToWechat({ renderedHTML, styleConfig, imageStore, show
     applyCodeHighlighting(doc, { codeTheme, styleConfig });
     convertCodeBlocks(doc, styleConfig, codeTheme);
     flattenListItems(doc);
+    convertOrderedListsToWechatParagraphs(doc, styleConfig);
+    normalizeListTypographyForWechat(doc, styleConfig);
     normalizeBlockquotes(doc);
     wrapSectionIfNeeded(doc, styleConfig);
 

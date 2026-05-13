@@ -223,7 +223,7 @@ function buildFormulaNode(doc, svgMarkup, latex, displayMode) {
     wrapper.setAttribute('data-formula-plain', buildFormulaPlainText(latex, false));
     wrapper.setAttribute(
       'style',
-      'display: inline-block !important; vertical-align: middle !important; margin: 0 0.12em !important;'
+      'display: inline-block !important; vertical-align: -0.05em !important; margin: 0 0.4em !important; font-size: 0.9em !important; line-height: 1 !important;'
     );
     wrapper.innerHTML = svgMarkup;
     return wrapper;
@@ -245,7 +245,7 @@ function buildFormulaNode(doc, svgMarkup, latex, displayMode) {
   const content = doc.createElement('span');
   content.setAttribute(
     'style',
-    'display: inline-block !important; min-width: max-content !important;'
+    'display: inline-block !important; min-width: max-content !important; font-size: 0.85em !important; line-height: 1 !important;'
   );
   content.innerHTML = svgMarkup;
 
