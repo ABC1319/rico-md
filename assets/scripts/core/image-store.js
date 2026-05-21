@@ -131,6 +131,19 @@ export class ImageStore {
     });
   }
 
+  async getImageRecord(id) {
+    if (!this.db) await this.init();
+
+    return new Promise((resolve, reject) => {
+      const transaction = this.db.transaction([this.storeName], 'readonly');
+      const objectStore = transaction.objectStore(this.storeName);
+      const request = objectStore.get(id);
+
+      request.onsuccess = () => resolve(request.result || null);
+      request.onerror = () => reject(request.error);
+    });
+  }
+
   /**
    * 删除图片
    * @param {string} id - 图片 ID

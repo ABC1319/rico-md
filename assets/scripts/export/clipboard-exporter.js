@@ -21,37 +21,186 @@ function extractBackgroundColor(styleString) {
   return null;
 }
 
-async function convertImageToBase64(imgElement, imageStore) {
-  const src = imgElement.getAttribute('src');
-  if (src.startsWith('data:')) return src;
+const CLIPBOARD_IMAGE_MAX_BYTES = 1024 * 1024;
+const CLIPBOARD_IMAGE_MAX_DIMENSION = 1200;
+const CLIPBOARD_IMAGE_JPEG_QUALITY = 0.6;
+const IMAGE_READ_TIMEOUT_MS = 8000;
+const IMAGE_GIF_CHECK_TIMEOUT_MS = 3000;
 
-  const imageId = imgElement.getAttribute('data-image-id');
-  if (imageId && imageStore) {
-    try {
-      const blob = await imageStore.getImageBlob(imageId);
-      if (blob) {
-        return new Promise((resolve, reject) => {
-          const reader = new FileReader();
-          reader.onloadend = () => resolve(reader.result);
-          reader.onerror = reject;
-          reader.readAsDataURL(blob);
-        });
-      }
-    } catch (_error) {
-      // fall through to fetch
-    }
-  }
+function withTimeout(promise, ms, message = 'Operation timed out') {
+  let timer;
+  return Promise.race([
+    promise.finally(() => clearTimeout(timer)),
+    new Promise((_, reject) => {
+      timer = setTimeout(() => reject(new Error(message)), ms);
+    })
+  ]);
+}
 
-  const response = await fetch(src, { mode: 'cors', cache: 'default' });
-  if (!response.ok) throw new Error(`HTTP ${response.status}`);
-
-  const blob = await response.blob();
+function blobToDataURL(blob) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onloadend = () => resolve(reader.result);
     reader.onerror = reject;
     reader.readAsDataURL(blob);
   });
+}
+
+function ensureBlobType(blob, mimeType) {
+  if (!blob || !mimeType || blob.type === mimeType) return blob;
+  return new Blob([blob], { type: mimeType });
+}
+
+async function fetchImageBlob(src) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), IMAGE_READ_TIMEOUT_MS);
+
+  try {
+    const response = await fetch(src, {
+      mode: 'cors',
+      cache: 'default',
+      signal: controller.signal
+    });
+
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+    const blob = await response.blob();
+    const contentType = response.headers.get('content-type');
+    return ensureBlobType(blob, contentType);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+function loadImageFromBlob(blob) {
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    const objectURL = URL.createObjectURL(blob);
+
+    image.onload = () => {
+      URL.revokeObjectURL(objectURL);
+      resolve(image);
+    };
+    image.onerror = () => {
+      URL.revokeObjectURL(objectURL);
+      reject(new Error('Image decode failed'));
+    };
+    image.src = objectURL;
+  });
+}
+
+async function recompressForClipboard(blob) {
+  if (!blob || blob.size <= CLIPBOARD_IMAGE_MAX_BYTES) return blob;
+  if (!blob.type?.startsWith('image/') || blob.type === 'image/gif') return blob;
+
+  try {
+    const image = await loadImageFromBlob(blob);
+    const sourceWidth = image.naturalWidth || image.width;
+    const sourceHeight = image.naturalHeight || image.height;
+    const scale = Math.min(
+      1,
+      CLIPBOARD_IMAGE_MAX_DIMENSION / Math.max(sourceWidth, sourceHeight)
+    );
+    const width = Math.max(1, Math.round(sourceWidth * scale));
+    const height = Math.max(1, Math.round(sourceHeight * scale));
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+
+    canvas.width = width;
+    canvas.height = height;
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, width, height);
+    ctx.drawImage(image, 0, 0, width, height);
+
+    const compressed = await new Promise((resolve) => {
+      canvas.toBlob(resolve, 'image/jpeg', CLIPBOARD_IMAGE_JPEG_QUALITY);
+    });
+
+    return compressed && compressed.size < blob.size ? compressed : blob;
+  } catch (error) {
+    console.warn('Clipboard image recompress failed:', error);
+    return blob;
+  }
+}
+
+async function readStoredImageBlob(imgElement, imageStore) {
+  const imageId = imgElement.getAttribute('data-image-id');
+  if (!imageId || !imageStore) return null;
+
+  if (typeof imageStore.getImageRecord === 'function') {
+    const record = await withTimeout(
+      imageStore.getImageRecord(imageId),
+      IMAGE_READ_TIMEOUT_MS,
+      'Read image record timed out'
+    );
+    if (record?.blob) {
+      return ensureBlobType(record.blob, record.mimeType || record.blob.type);
+    }
+  }
+
+  if (typeof imageStore.getImageBlob === 'function') {
+    return withTimeout(
+      imageStore.getImageBlob(imageId),
+      IMAGE_READ_TIMEOUT_MS,
+      'Read image blob timed out'
+    );
+  }
+
+  return null;
+}
+
+async function isGifImage(imgElement, imageStore) {
+  const src = imgElement.getAttribute('src') || '';
+  const imageId = imgElement.getAttribute('data-image-id');
+
+  if (src.startsWith('data:image/gif')) return true;
+
+  if (imageId && imageStore && typeof imageStore.getImageRecord === 'function') {
+    try {
+      const record = await withTimeout(
+        imageStore.getImageRecord(imageId),
+        IMAGE_GIF_CHECK_TIMEOUT_MS,
+        'Check GIF timed out'
+      );
+      const mimeType = record?.mimeType || record?.blob?.type || '';
+      if (mimeType.toLowerCase() === 'image/gif') return true;
+    } catch (_error) {
+      // Fall back to src sniffing.
+    }
+  }
+
+  const normalizedSrc = src.toLowerCase();
+  return normalizedSrc.endsWith('.gif') || normalizedSrc.includes('.gif?');
+}
+
+function replaceGifWithPlaceholder(imgElement) {
+  const doc = imgElement.ownerDocument;
+  const placeholder = doc.createElement('section');
+
+  placeholder.setAttribute(
+    'style',
+    'margin: 16px 0 !important; padding: 14px 16px !important; border: 1px dashed #d8a100 !important; border-radius: 8px !important; background: #fff8e1 !important; color: #7a5200 !important; font-size: 14px !important; line-height: 1.6 !important; text-align: center !important;'
+  );
+  placeholder.textContent = 'GIF 动图不会在复制时内嵌，请在公众号后台单独上传。';
+  imgElement.replaceWith(placeholder);
+}
+
+async function convertImageToBase64(imgElement, imageStore) {
+  const src = imgElement.getAttribute('src') || '';
+  if (!src) throw new Error('Image src is empty');
+  if (src.startsWith('data:')) return src;
+
+  try {
+    const storedBlob = await readStoredImageBlob(imgElement, imageStore);
+    if (storedBlob) {
+      return blobToDataURL(await recompressForClipboard(storedBlob));
+    }
+  } catch (error) {
+    console.warn('Read stored clipboard image failed:', error);
+  }
+
+  const blob = await fetchImageBlob(src);
+  return blobToDataURL(await recompressForClipboard(blob));
 }
 
 function convertGridToTable(doc) {
@@ -65,12 +214,12 @@ function convertGridToTable(doc) {
 function convertSingleGridToTable(doc, grid, columns) {
   const wrappers = Array.from(grid.children);
   const gridStyle = grid.getAttribute('style') || '';
-  const gridMarginTop = extractStyleValue(gridStyle, 'margin-top') || '20px';
-  const gridMarginBottom = extractStyleValue(gridStyle, 'margin-bottom') || '20px';
+  const gridMarginTop = cleanStyleValue(extractLastStyleValue(gridStyle, 'margin-top')) || '20px';
+  const gridMarginBottom = cleanStyleValue(extractLastStyleValue(gridStyle, 'margin-bottom')) || '20px';
   const table = doc.createElement('table');
   table.setAttribute(
     'style',
-    `width: 100% !important; border-collapse: collapse !important; margin-top: ${gridMarginTop} !important; margin-right: auto !important; margin-bottom: ${gridMarginBottom} !important; margin-left: auto !important; table-layout: fixed !important; border: none !important;`
+    `width: 100% !important; border-collapse: separate !important; border-spacing: 0 !important; margin-top: ${gridMarginTop} !important; margin-right: auto !important; margin-bottom: ${gridMarginBottom} !important; margin-left: auto !important; table-layout: fixed !important; border: none !important; overflow: visible !important;`
   );
 
   const rows = Math.ceil(wrappers.length / columns);
@@ -80,7 +229,7 @@ function convertSingleGridToTable(doc, grid, columns) {
 
     for (let columnIndex = 0; columnIndex < columns; columnIndex += 1) {
       const cell = doc.createElement('td');
-      cell.setAttribute('style', `padding: 4px !important; vertical-align: top !important; width: ${100 / columns}% !important; border: none !important;`);
+      cell.setAttribute('style', `padding: 8px !important; vertical-align: top !important; width: ${100 / columns}% !important; border: none !important; overflow: visible !important;`);
 
       const item = wrappers[rowIndex * columns + columnIndex];
       if (item) {
@@ -88,19 +237,17 @@ function convertSingleGridToTable(doc, grid, columns) {
         if (image) {
           const itemStyle = item.getAttribute('style') || '';
           const imageStyle = image.getAttribute('style') || '';
-          const borderRadius = extractStyleValue(itemStyle, 'border-radius')
-            || extractStyleValue(imageStyle, 'border-radius')
-            || '4px';
-          const boxShadow = extractStyleValue(itemStyle, 'box-shadow')
-            || extractStyleValue(imageStyle, 'box-shadow')
-            || 'none';
+          const visualStyle = buildGridItemVisualStyle(itemStyle, imageStyle);
           const nextImage = image.cloneNode(true);
-          nextImage.setAttribute('style', 'max-width: calc(100% - 20px) !important; max-height: 340px !important; width: auto !important; height: auto !important; display: inline-block !important; margin: 0 auto !important; border-radius: 0 !important; box-shadow: none !important; object-fit: contain !important;');
+          nextImage.setAttribute('style', buildGridImageExportStyle(itemStyle, imageStyle));
 
           const wrapper = doc.createElement('div');
           wrapper.setAttribute(
             'style',
-            `width: 100% !important; height: 360px !important; text-align: center !important; background-color: #f5f5f5 !important; border-radius: ${borderRadius} !important; box-shadow: ${boxShadow} !important; padding: 10px !important; box-sizing: border-box !important; overflow: hidden !important; display: table !important;`
+            mergeStyleText(
+              'width: 100% !important; height: 360px !important; text-align: center !important; padding: 0 !important; box-sizing: border-box !important; overflow: visible !important; display: table !important;',
+              visualStyle
+            )
           );
 
           const inner = doc.createElement('div');
@@ -118,6 +265,64 @@ function convertSingleGridToTable(doc, grid, columns) {
   }
 
   grid.parentNode.replaceChild(table, grid);
+}
+
+function buildGridItemVisualStyle(itemStyle, imageStyle) {
+  const declarations = [];
+  const borderRadius = cleanStyleValue(extractLastStyleValue(itemStyle, 'border-radius')
+    || extractLastStyleValue(imageStyle, 'border-radius'));
+  const boxShadow = cleanStyleValue(extractLastStyleValue(itemStyle, 'box-shadow')
+    || extractLastStyleValue(imageStyle, 'box-shadow'));
+  const webkitBoxShadow = cleanStyleValue(extractLastStyleValue(itemStyle, '-webkit-box-shadow')
+    || extractLastStyleValue(imageStyle, '-webkit-box-shadow'));
+  const border = cleanStyleValue(extractLastStyleValue(itemStyle, 'border')
+    || extractLastStyleValue(imageStyle, 'border'));
+  const borderTop = cleanStyleValue(extractLastStyleValue(itemStyle, 'border-top')
+    || extractLastStyleValue(imageStyle, 'border-top'));
+  const borderRight = cleanStyleValue(extractLastStyleValue(itemStyle, 'border-right')
+    || extractLastStyleValue(imageStyle, 'border-right'));
+  const borderBottom = cleanStyleValue(extractLastStyleValue(itemStyle, 'border-bottom')
+    || extractLastStyleValue(imageStyle, 'border-bottom'));
+  const borderLeft = cleanStyleValue(extractLastStyleValue(itemStyle, 'border-left')
+    || extractLastStyleValue(imageStyle, 'border-left'));
+  const background = cleanStyleValue(extractLastStyleValue(itemStyle, 'background')
+    || extractLastStyleValue(itemStyle, 'background-color')
+    || extractLastStyleValue(imageStyle, 'background')
+    || extractLastStyleValue(imageStyle, 'background-color'));
+
+  if (background) declarations.push(`background: ${background} !important;`);
+  if (borderRadius) declarations.push(`border-radius: ${borderRadius} !important;`);
+  if (boxShadow) declarations.push(`box-shadow: ${boxShadow} !important;`);
+  if (webkitBoxShadow) declarations.push(`-webkit-box-shadow: ${webkitBoxShadow} !important;`);
+  if (border) declarations.push(`border: ${border} !important;`);
+  if (borderTop) declarations.push(`border-top: ${borderTop} !important;`);
+  if (borderRight) declarations.push(`border-right: ${borderRight} !important;`);
+  if (borderBottom) declarations.push(`border-bottom: ${borderBottom} !important;`);
+  if (borderLeft) declarations.push(`border-left: ${borderLeft} !important;`);
+
+  return declarations.join(' ');
+}
+
+function buildGridImageExportStyle(itemStyle, imageStyle) {
+  const maxHeight = cleanStyleValue(extractLastStyleValue(imageStyle, 'max-height')) || '340px';
+  const filter = cleanStyleValue(extractLastStyleValue(imageStyle, 'filter'));
+  const opacity = cleanStyleValue(extractLastStyleValue(imageStyle, 'opacity'));
+  const visualStyle = buildGridItemVisualStyle(itemStyle, imageStyle);
+  const declarations = [
+    'max-width: 100% !important;',
+    `max-height: ${maxHeight} !important;`,
+    'width: auto !important;',
+    'height: auto !important;',
+    'display: inline-block !important;',
+    'margin: 0 auto !important;',
+    'object-fit: contain !important;'
+  ];
+
+  if (filter) declarations.push(`filter: ${filter} !important;`);
+  if (opacity) declarations.push(`opacity: ${opacity} !important;`);
+  if (visualStyle) declarations.push(visualStyle);
+
+  return declarations.join(' ');
 }
 
 function convertCodeBlocks(doc, styleConfig, codeTheme) {
@@ -196,6 +401,19 @@ function extractStyleValue(styleText, property) {
   const escapedProperty = property.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const match = styleText.match(new RegExp(`(?:^|;)\\s*${escapedProperty}\\s*:\\s*([^;]+)`, 'i'));
   return match ? match[1].trim() : null;
+}
+
+function extractLastStyleValue(styleText, property) {
+  if (!styleText || !property) return null;
+  const escapedProperty = property.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const matches = Array.from(styleText.matchAll(new RegExp(`(?:^|;)\\s*${escapedProperty}\\s*:\\s*([^;]+)`, 'gi')));
+  if (matches.length === 0) return null;
+  return matches[matches.length - 1][1].trim();
+}
+
+function cleanStyleValue(value) {
+  if (!value) return null;
+  return String(value).replace(/\s*!important\s*$/i, '').trim();
 }
 
 function escapeHtml(value) {
@@ -474,14 +692,30 @@ export async function copyToWechat({ renderedHTML, styleConfig, imageStore, show
     const images = Array.from(doc.querySelectorAll('img'));
     if (images.length > 0) {
       showToast(`正在处理 ${images.length} 张图片...`, 'success');
-      await Promise.all(images.map(async (img) => {
+      let successCount = 0;
+      let failCount = 0;
+      let gifCount = 0;
+
+      for (const img of images) {
         try {
+          if (await isGifImage(img, imageStore)) {
+            replaceGifWithPlaceholder(img);
+            gifCount += 1;
+            continue;
+          }
+
           const base64 = await convertImageToBase64(img, imageStore);
           img.setAttribute('src', base64);
+          successCount += 1;
         } catch (_error) {
-          img.remove();
+          console.warn('Clipboard image conversion failed, keeping original src:', _error);
+          failCount += 1;
         }
-      }));
+      }
+
+      if (gifCount > 0 || failCount > 0) {
+        showToast(`图片处理完成：成功 ${successCount} 张，GIF ${gifCount} 张，失败 ${failCount} 张`, failCount > 0 ? 'error' : 'success');
+      }
     }
 
     await convertMathForWechat(doc);

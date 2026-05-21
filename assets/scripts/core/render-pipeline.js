@@ -66,6 +66,7 @@ function applyInlineStyles(html, styleConfig, codeTheme, displaySettings) {
     });
   });
 
+  applyImageGridThemeStyles(doc, scaledStyle);
   normalizeTableOverflow(doc);
   applyInlineCodeStyles(doc, scaledStyle);
   applyStandalonePreStyles(doc, scaledStyle);
@@ -77,6 +78,88 @@ function applyInlineStyles(html, styleConfig, codeTheme, displaySettings) {
   container.setAttribute('style', scaledStyle.container);
   container.innerHTML = doc.body.innerHTML;
   return container.outerHTML;
+}
+
+function applyImageGridThemeStyles(doc, style) {
+  const imageStyle = style?.img || '';
+  if (!imageStyle) return;
+
+  const visualStyle = filterStyleDeclarations(imageStyle, [
+    'border',
+    'border-top',
+    'border-right',
+    'border-bottom',
+    'border-left',
+    'border-color',
+    'border-style',
+    'border-width',
+    'border-radius',
+    'box-shadow',
+    '-webkit-box-shadow',
+    'background',
+    'background-color'
+  ]);
+  const imageOnlyStyle = filterStyleDeclarations(imageStyle, [
+    'filter',
+    'opacity'
+  ]);
+  const maxHeight = extractStyleValue(imageStyle, 'max-height');
+  const gridSpacing = buildGridSpacingFromImageStyle(imageStyle);
+
+  doc.querySelectorAll('.image-grid').forEach((grid) => {
+    appendStyleText(grid, gridSpacing);
+
+    Array.from(grid.children).forEach((wrapper) => {
+      appendStyleText(wrapper, 'overflow: visible;');
+
+      const img = wrapper.querySelector('img');
+      if (img && maxHeight) {
+        appendStyleText(img, `max-height: ${maxHeight}; object-fit: contain;`);
+      }
+      if (img) {
+        appendStyleText(img, visualStyle);
+        appendStyleText(img, imageOnlyStyle);
+      }
+    });
+  });
+}
+
+function filterStyleDeclarations(styleText, allowedProperties) {
+  if (!styleText) return '';
+
+  const allowed = new Set(allowedProperties.map((property) => property.toLowerCase()));
+  return styleText
+    .split(';')
+    .map((declaration) => declaration.trim())
+    .filter(Boolean)
+    .filter((declaration) => {
+      const property = declaration.split(':')[0]?.trim().toLowerCase();
+      return allowed.has(property);
+    })
+    .join('; ');
+}
+
+function buildGridSpacingFromImageStyle(imageStyle) {
+  const top = extractStyleValue(imageStyle, 'margin-top') || extractBoxSideValue(imageStyle, 'margin', 'top');
+  const bottom = extractStyleValue(imageStyle, 'margin-bottom') || extractBoxSideValue(imageStyle, 'margin', 'bottom');
+  const declarations = [];
+
+  if (top) declarations.push(`margin-top: ${top};`);
+  if (bottom) declarations.push(`margin-bottom: ${bottom};`);
+
+  return declarations.join(' ');
+}
+
+function extractBoxSideValue(styleText, property, side) {
+  const value = extractStyleValue(styleText, property);
+  if (!value) return null;
+
+  const parts = value.split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return null;
+  if (parts.length === 1) return parts[0];
+  if (parts.length === 2) return side === 'top' || side === 'bottom' ? parts[0] : parts[1];
+  if (parts.length === 3) return side === 'bottom' ? parts[2] : parts[0];
+  return side === 'top' ? parts[0] : side === 'right' ? parts[1] : side === 'bottom' ? parts[2] : parts[3];
 }
 
 function scaleStyleFontSizes(style, scale) {
@@ -114,10 +197,10 @@ function applyImageDisplaySettings(doc, displaySettings) {
   doc.querySelectorAll('.image-grid').forEach((grid) => {
     appendStyleText(grid, `margin-top: ${marginTop}px !important; margin-bottom: ${marginBottom}px !important;`);
     Array.from(grid.children).forEach((wrapper) => {
-      appendStyleText(wrapper, `border-radius: ${radius} !important; box-shadow: ${shadow} !important; overflow: hidden !important;`);
+      appendStyleText(wrapper, 'overflow: visible !important;');
       const img = wrapper.querySelector('img');
       if (img) {
-        appendStyleText(img, 'border-radius: 0 !important; box-shadow: none !important;');
+        appendStyleText(img, `border-radius: ${radius} !important; box-shadow: ${shadow} !important;`);
       }
     });
   });
@@ -217,6 +300,15 @@ function appendStyleText(element, styleText) {
   if (!styleText) return;
   const currentStyle = element.getAttribute('style') || '';
   element.setAttribute('style', currentStyle ? `${currentStyle}; ${styleText}` : styleText);
+}
+
+function mergeStyleText(...parts) {
+  return parts
+    .filter(Boolean)
+    .map((part) => String(part).trim())
+    .filter(Boolean)
+    .join(' ')
+    .trim();
 }
 
 function normalizeTableOverflow(doc) {
@@ -380,15 +472,16 @@ function groupConsecutiveImages(doc) {
     gridContainer.setAttribute('data-columns', String(columns));
     gridContainer.setAttribute(
       'style',
-      `display: grid; grid-template-columns: repeat(${columns}, 1fr); gap: 8px; margin: 20px auto; max-width: 100%; align-items: start;`
+      `display: grid; grid-template-columns: repeat(${columns}, 1fr); gap: 18px; margin: 20px auto; max-width: 100%; align-items: start; overflow: visible;`
     );
 
     group.forEach((item) => {
       const wrapper = doc.createElement('div');
-      wrapper.setAttribute('style', 'width: 100%; height: auto; overflow: hidden;');
+      wrapper.setAttribute('style', 'width: 100%; height: auto; overflow: visible;');
 
       const image = item.img.cloneNode(true);
-      image.setAttribute('style', 'width: 100%; height: auto; display: block; border-radius: 8px;');
+      const imageStyle = item.img.getAttribute('style') || '';
+      image.setAttribute('style', mergeStyleText(imageStyle, 'width: 100%; height: auto; display: block;'));
       wrapper.appendChild(image);
       gridContainer.appendChild(wrapper);
     });
