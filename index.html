@@ -76,7 +76,7 @@
       </div>
     </header>
 
-    <div class="main-area" :class="{ 'has-right-panel': activePanel === 'theme' || activePanel === 'code' }">
+    <div class="main-area" :class="{ 'has-right-panel': activePanel === 'theme' || activePanel === 'code' || activePanel === 'misc' }">
       <transition name="sidebar">
         <aside v-if="sidebarOpen" class="sidebar">
           <div class="sidebar-section">
@@ -265,10 +265,10 @@
         </div>
       </div>
 
-      <div class="resize-handle" data-handle="preview-right" v-if="activePanel === 'theme' || activePanel === 'code'"></div>
+      <div class="resize-handle" data-handle="preview-right" v-if="activePanel === 'theme' || activePanel === 'code' || activePanel === 'misc'"></div>
 
       <transition name="right-panel-slide">
-        <div v-if="activePanel === 'theme' || activePanel === 'code'" class="right-panel" :style="rightPanelWidth ? { width: rightPanelWidth + 'px' } : {}">
+        <div v-if="activePanel === 'theme' || activePanel === 'code' || activePanel === 'misc'" class="right-panel" :style="rightPanelWidth ? { width: rightPanelWidth + 'px' } : {}">
           <div class="right-panel-tabs">
             <button class="right-panel-tab" :class="{ active: activePanel === 'theme' }" @click="togglePanel('theme')">
               <svg class="lucide lucide-palette"  xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-palette-icon lucide-palette"><path d="M12 22a1 1 0 0 1 0-20 10 9 0 0 1 10 9 5 5 0 0 1-5 5h-2.25a1.75 1.75 0 0 0-1.4 2.8l.3.4a1.75 1.75 0 0 1-1.4 2.8z"/><circle cx="13.5" cy="6.5" r=".5" fill="currentColor"/><circle cx="17.5" cy="10.5" r=".5" fill="currentColor"/><circle cx="6.5" cy="12.5" r=".5" fill="currentColor"/><circle cx="8.5" cy="7.5" r=".5" fill="currentColor"/></svg>
@@ -277,6 +277,10 @@
             <button class="right-panel-tab" :class="{ active: activePanel === 'code' }" @click="togglePanel('code')">
               <svg class="lucide lucide-code-xml" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m18 16 4-4-4-4"></path><path d="m6 8-4 4 4 4"></path><path d="m14.5 4-5 16"></path></svg>
               代码
+            </button>
+            <button class="right-panel-tab" :class="{ active: activePanel === 'misc' }" @click="togglePanel('misc')">
+              <svg class="lucide lucide-sliders-horizontal" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="21" x2="14" y1="4" y2="4"></line><line x1="10" x2="3" y1="4" y2="4"></line><line x1="21" x2="12" y1="12" y2="12"></line><line x1="8" x2="3" y1="12" y2="12"></line><line x1="21" x2="16" y1="20" y2="20"></line><line x1="12" x2="3" y1="20" y2="20"></line><line x1="14" x2="14" y1="2" y2="6"></line><line x1="8" x2="8" y1="10" y2="14"></line><line x1="16" x2="16" y1="18" y2="22"></line></svg>
+              其他
             </button>
             <button class="right-panel-close" @click="togglePanel(activePanel)">
               <svg class="lucide lucide-x" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg>
@@ -353,6 +357,298 @@
                   </div>
                 </div>
 
+              </div>
+            </template>
+
+            <template v-if="activePanel === 'misc'">
+              <div class="misc-panel-stack">
+                <div class="misc-panel-section">
+                  <div class="code-panel-section-title">字号</div>
+                  <div class="misc-button-grid misc-button-grid-font">
+                    <button
+                      v-for="option in fontScaleOptions"
+                      :key="`font-scale-${option.value}`"
+                      class="segmented-option-btn"
+                      :class="{ active: displaySettings.fontScale === option.value }"
+                      @click="setFontScale(option.value)"
+                    >
+                      <span>{{ option.label }}</span>
+                      <small>{{ option.meta }}</small>
+                    </button>
+                  </div>
+                  <div class="misc-setting-row">
+                    <div class="misc-range-header">
+                      <div class="misc-setting-label">正文行高</div>
+                      <div class="misc-inline-actions">
+                        <button
+                          class="mini-toggle-btn"
+                          :class="{ active: !isBodyLineHeightCustom }"
+                          @click="setBodyLineHeightMode('theme')"
+                        >
+                          跟随主题
+                        </button>
+                        <button
+                          class="mini-toggle-btn"
+                          :class="{ active: isBodyLineHeightCustom }"
+                          @click="setBodyLineHeightMode('custom')"
+                        >
+                          自定义
+                        </button>
+                        <span class="misc-range-value">
+                          {{ isBodyLineHeightCustom ? Number(displaySettings.bodyLineHeight).toFixed(2) : '主题默认' }}
+                        </span>
+                      </div>
+                    </div>
+                    <div class="misc-range-input">
+                      <input
+                        type="range"
+                        min="1.2"
+                        max="2.6"
+                        step="0.05"
+                        :value="displaySettings.bodyLineHeight ?? 1.75"
+                        :disabled="!isBodyLineHeightCustom"
+                        @input="setBodyLineHeight($event.target.value)"
+                      >
+                      <input
+                        class="misc-number-input"
+                        type="number"
+                        min="1.2"
+                        max="2.6"
+                        step="0.05"
+                        :value="displaySettings.bodyLineHeight ?? 1.75"
+                        :disabled="!isBodyLineHeightCustom"
+                        @input="setBodyLineHeight($event.target.value)"
+                      >
+                    </div>
+                  </div>
+                  <p class="misc-panel-note">作用于容器、标题和正文等字号，复制到公众号与导出 HTML 会保留当前比例。</p>
+                </div>
+
+                <div class="misc-panel-section">
+                  <div class="code-panel-section-title">图片属性</div>
+
+                  <div class="misc-setting-row">
+                    <div class="misc-setting-label">模式</div>
+                    <div class="misc-button-grid misc-button-grid-dual">
+                      <button
+                        v-for="option in imageStyleModeOptions"
+                        :key="`image-style-mode-${option.value}`"
+                        class="segmented-option-btn"
+                        :class="{ active: displaySettings.imageStyleMode === option.value }"
+                        @click="setImageStyleMode(option.value)"
+                      >
+                        <span>{{ option.label }}</span>
+                        <small>{{ option.meta }}</small>
+                      </button>
+                    </div>
+                  </div>
+
+                  <div class="misc-control-stack" :class="{ disabled: !isImageStyleCustom }">
+                    <div class="misc-setting-row">
+                      <div class="misc-range-header">
+                        <div class="misc-setting-label">上间距</div>
+                        <span class="misc-range-value">{{ displaySettings.imageMarginTop }}px</span>
+                      </div>
+                      <div class="misc-range-input">
+                        <input
+                          type="range"
+                          min="0"
+                          max="200"
+                          :value="displaySettings.imageMarginTop"
+                          :disabled="!isImageStyleCustom"
+                          @input="updateImageMetric('imageMarginTop', $event.target.value, 0, 200)"
+                        >
+                        <input
+                          class="misc-number-input"
+                          type="number"
+                          min="0"
+                          max="200"
+                          :value="displaySettings.imageMarginTop"
+                          :disabled="!isImageStyleCustom"
+                          @input="updateImageMetric('imageMarginTop', $event.target.value, 0, 200)"
+                        >
+                      </div>
+                    </div>
+
+                    <div class="misc-setting-row">
+                      <div class="misc-range-header">
+                        <div class="misc-setting-label">下间距</div>
+                        <span class="misc-range-value">{{ displaySettings.imageMarginBottom }}px</span>
+                      </div>
+                      <div class="misc-range-input">
+                        <input
+                          type="range"
+                          min="0"
+                          max="200"
+                          :value="displaySettings.imageMarginBottom"
+                          :disabled="!isImageStyleCustom"
+                          @input="updateImageMetric('imageMarginBottom', $event.target.value, 0, 200)"
+                        >
+                        <input
+                          class="misc-number-input"
+                          type="number"
+                          min="0"
+                          max="200"
+                          :value="displaySettings.imageMarginBottom"
+                          :disabled="!isImageStyleCustom"
+                          @input="updateImageMetric('imageMarginBottom', $event.target.value, 0, 200)"
+                        >
+                      </div>
+                    </div>
+
+                    <div class="misc-setting-row">
+                      <div class="misc-setting-label">圆角模式</div>
+                      <div class="misc-button-grid misc-button-grid-dual">
+                        <button
+                          v-for="option in imageRadiusModeOptions"
+                          :key="`image-radius-mode-${option.value}`"
+                          class="segmented-option-btn compact"
+                          :class="{ active: displaySettings.imageRadiusMode === option.value }"
+                          :disabled="!isImageStyleCustom"
+                          @click="setImageRadiusMode(option.value)"
+                        >
+                          <span>{{ option.label }}</span>
+                        </button>
+                      </div>
+                    </div>
+
+                    <div class="misc-setting-row">
+                      <div class="misc-range-header">
+                        <div class="misc-setting-label">圆角大小</div>
+                        <span class="misc-range-value">
+                          {{ displaySettings.imageRadiusMode === 'circle' ? '50%' : displaySettings.imageRadius + 'px' }}
+                        </span>
+                      </div>
+                      <div class="misc-range-input">
+                        <input
+                          type="range"
+                          min="0"
+                          max="360"
+                          :value="displaySettings.imageRadius"
+                          :disabled="!isImageStyleCustom || displaySettings.imageRadiusMode === 'circle'"
+                          @input="updateImageMetric('imageRadius', $event.target.value, 0, 360)"
+                        >
+                        <input
+                          class="misc-number-input"
+                          type="number"
+                          min="0"
+                          max="360"
+                          :value="displaySettings.imageRadius"
+                          :disabled="!isImageStyleCustom || displaySettings.imageRadiusMode === 'circle'"
+                          @input="updateImageMetric('imageRadius', $event.target.value, 0, 360)"
+                        >
+                      </div>
+                    </div>
+
+                    <div class="misc-setting-row">
+                      <div class="misc-setting-label">阴影</div>
+                      <div class="misc-shadow-grid">
+                        <label class="misc-shadow-field">
+                          <span>X</span>
+                          <input
+                            class="misc-number-input"
+                            type="number"
+                            min="-80"
+                            max="80"
+                            :value="displaySettings.imageShadowX"
+                            :disabled="!isImageStyleCustom"
+                            @input="updateImageMetric('imageShadowX', $event.target.value, -80, 80)"
+                          >
+                        </label>
+                        <label class="misc-shadow-field">
+                          <span>Y</span>
+                          <input
+                            class="misc-number-input"
+                            type="number"
+                            min="-80"
+                            max="80"
+                            :value="displaySettings.imageShadowY"
+                            :disabled="!isImageStyleCustom"
+                            @input="updateImageMetric('imageShadowY', $event.target.value, -80, 80)"
+                          >
+                        </label>
+                        <label class="misc-shadow-field">
+                          <span>Blur</span>
+                          <input
+                            class="misc-number-input"
+                            type="number"
+                            min="0"
+                            max="120"
+                            :value="displaySettings.imageShadowBlur"
+                            :disabled="!isImageStyleCustom"
+                            @input="updateImageMetric('imageShadowBlur', $event.target.value, 0, 120)"
+                          >
+                        </label>
+                        <label class="misc-shadow-field">
+                          <span>Spread</span>
+                          <input
+                            class="misc-number-input"
+                            type="number"
+                            min="-40"
+                            max="80"
+                            :value="displaySettings.imageShadowSpread"
+                            :disabled="!isImageStyleCustom"
+                            @input="updateImageMetric('imageShadowSpread', $event.target.value, -40, 80)"
+                          >
+                        </label>
+                      </div>
+                    </div>
+
+                    <div class="misc-setting-row">
+                      <div class="misc-range-header">
+                        <div class="misc-setting-label">阴影透明度</div>
+                        <span class="misc-range-value">{{ Math.round(displaySettings.imageShadowOpacity * 100) }}%</span>
+                      </div>
+                      <div class="misc-range-input">
+                        <input
+                          type="range"
+                          min="0"
+                          max="100"
+                          :value="Math.round(displaySettings.imageShadowOpacity * 100)"
+                          :disabled="!isImageStyleCustom"
+                          @input="updateImageShadowOpacity($event.target.value)"
+                        >
+                        <input
+                          class="misc-number-input"
+                          type="number"
+                          min="0"
+                          max="100"
+                          :value="Math.round(displaySettings.imageShadowOpacity * 100)"
+                          :disabled="!isImageStyleCustom"
+                          @input="updateImageShadowOpacity($event.target.value)"
+                        >
+                      </div>
+                    </div>
+
+                    <div class="misc-setting-row">
+                      <div class="misc-setting-label">阴影颜色</div>
+                      <div class="misc-color-row">
+                        <input
+                          class="misc-color-input"
+                          type="color"
+                          :value="displaySettings.imageShadowColor"
+                          :disabled="!isImageStyleCustom"
+                          @input="updateImageShadowColor($event.target.value)"
+                        >
+                        <input
+                          class="misc-text-input"
+                          type="text"
+                          :value="displaySettings.imageShadowColor"
+                          :disabled="!isImageStyleCustom"
+                          @input="updateImageShadowColor($event.target.value)"
+                        >
+                      </div>
+                    </div>
+
+                    <div class="misc-shadow-preview" :style="{
+                      boxShadow: `${displaySettings.imageShadowX}px ${displaySettings.imageShadowY}px ${displaySettings.imageShadowBlur}px ${displaySettings.imageShadowSpread}px ${displaySettings.imageShadowColor}${Math.round(displaySettings.imageShadowOpacity * 255).toString(16).padStart(2, '0')}`
+                    }">
+                      图片阴影预览
+                    </div>
+                  </div>
+                  <p class="misc-panel-note" v-if="!isImageStyleCustom">当前为默认模式，图片完全跟随主题本身样式，不受这里的自定义参数影响。</p>
+                  <p class="misc-panel-note" v-else>自定义模式会统一覆盖单图与多图拼版的上下间距、圆角和阴影效果。</p>
+                </div>
               </div>
             </template>
           </div>

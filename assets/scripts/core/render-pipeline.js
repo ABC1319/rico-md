@@ -5,7 +5,7 @@ import { applyCodeHighlighting } from './code-highlight.js';
  * @module render-pipeline
  */
 
-export async function renderPipeline({ markdown, md, imageStore, styleConfig, codeTheme }) {
+export async function renderPipeline({ markdown, md, imageStore, styleConfig, codeTheme, displaySettings }) {
   if (!markdown.trim()) return '';
 
   const { preprocessMarkdown } = await import('./markdown-engine.js');
@@ -17,7 +17,7 @@ export async function renderPipeline({ markdown, md, imageStore, styleConfig, co
     html = await processImageProtocol(html, imageStore);
   }
 
-  return applyInlineStyles(html, styleConfig, codeTheme);
+  return applyInlineStyles(html, styleConfig, codeTheme, displaySettings);
 }
 
 async function processImageProtocol(html, imageStore) {
@@ -45,8 +45,10 @@ async function processImageProtocol(html, imageStore) {
   return doc.body.innerHTML;
 }
 
-function applyInlineStyles(html, styleConfig, codeTheme) {
+function applyInlineStyles(html, styleConfig, codeTheme, displaySettings) {
   const style = styleConfig.styles;
+  const fontScale = Number(displaySettings?.fontScale) || 1;
+  const scaledStyle = fontScale !== 1 ? scaleStyleFontSizes(style, fontScale) : style;
   const parser = new DOMParser();
   const doc = parser.parseFromString(html, 'text/html');
 
@@ -54,26 +56,113 @@ function applyInlineStyles(html, styleConfig, codeTheme) {
   groupConsecutiveImages(doc);
   assignHeadingIds(doc);
 
-  Object.keys(style).forEach((selector) => {
+  Object.keys(scaledStyle).forEach((selector) => {
     if (selector === 'container' || selector === 'pre' || selector === 'code' || selector === 'pre code') return;
 
     const elements = doc.querySelectorAll(selector);
     elements.forEach((element) => {
       if (element.tagName === 'IMG' && element.closest('.image-grid')) return;
-      appendStyleText(element, style[selector]);
+      appendStyleText(element, scaledStyle[selector]);
     });
   });
 
   normalizeTableOverflow(doc);
-  applyInlineCodeStyles(doc, style);
-  applyStandalonePreStyles(doc, style);
-  applyCodeBlockStyles(doc, style, codeTheme);
+  applyInlineCodeStyles(doc, scaledStyle);
+  applyStandalonePreStyles(doc, scaledStyle);
+  applyBodyLineHeightSettings(doc, displaySettings);
+  applyCodeBlockStyles(doc, scaledStyle, codeTheme, fontScale);
   applyCodeHighlighting(doc, { codeTheme, styleConfig });
+  applyImageDisplaySettings(doc, displaySettings);
 
   const container = doc.createElement('div');
-  container.setAttribute('style', style.container);
+  container.setAttribute('style', scaledStyle.container);
   container.innerHTML = doc.body.innerHTML;
   return container.outerHTML;
+}
+
+function scaleStyleFontSizes(style, scale) {
+  const result = {};
+  Object.keys(style).forEach((selector) => {
+    result[selector] = scaleFontSizeInDeclaration(style[selector], scale);
+  });
+  return result;
+}
+
+function scaleFontSizeInDeclaration(declaration, scale) {
+  if (!declaration || typeof declaration !== 'string') return declaration;
+  return declaration.replace(/(font-size\s*:\s*)([\d.]+)(px|rem|em|pt)/gi, (_match, prefix, value, unit) => {
+    const scaled = (parseFloat(value) * scale).toFixed(2).replace(/\.?0+$/, '');
+    return `${prefix}${scaled}${unit}`;
+  });
+}
+
+function applyImageDisplaySettings(doc, displaySettings) {
+  if (!displaySettings || displaySettings.imageStyleMode !== 'custom') return;
+
+  const marginTop = clampNumber(displaySettings.imageMarginTop, 0, 200, 24);
+  const marginBottom = clampNumber(displaySettings.imageMarginBottom, 0, 200, 32);
+  const radius = displaySettings.imageRadiusMode === 'circle'
+    ? '50%'
+    : `${clampNumber(displaySettings.imageRadius, 0, 360, 8)}px`;
+  const shadow = buildShadowValue(displaySettings);
+  const overrideDecl = `margin-top: ${marginTop}px !important; margin-bottom: ${marginBottom}px !important; border-radius: ${radius} !important; box-shadow: ${shadow} !important;`;
+
+  doc.querySelectorAll('img').forEach((img) => {
+    if (img.closest('.image-grid')) return;
+    appendStyleText(img, overrideDecl);
+  });
+
+  doc.querySelectorAll('.image-grid').forEach((grid) => {
+    appendStyleText(grid, `margin-top: ${marginTop}px !important; margin-bottom: ${marginBottom}px !important;`);
+    Array.from(grid.children).forEach((wrapper) => {
+      appendStyleText(wrapper, `border-radius: ${radius} !important; box-shadow: ${shadow} !important; overflow: hidden !important;`);
+      const img = wrapper.querySelector('img');
+      if (img) {
+        appendStyleText(img, 'border-radius: 0 !important; box-shadow: none !important;');
+      }
+    });
+  });
+}
+
+function applyBodyLineHeightSettings(doc, displaySettings) {
+  const lineHeight = Number(displaySettings?.bodyLineHeight);
+  if (!Number.isFinite(lineHeight)) return;
+
+  doc.querySelectorAll('p, li, blockquote, td, th').forEach((element) => {
+    appendStyleText(element, `line-height: ${lineHeight} !important;`);
+  });
+}
+
+function clampNumber(value, min, max, fallback) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return fallback;
+  return Math.min(max, Math.max(min, number));
+}
+
+function buildShadowValue(displaySettings) {
+  const x = clampNumber(displaySettings.imageShadowX, -80, 80, 0);
+  const y = clampNumber(displaySettings.imageShadowY, -80, 80, 12);
+  const blur = clampNumber(displaySettings.imageShadowBlur, 0, 120, 28);
+  const spread = clampNumber(displaySettings.imageShadowSpread, -40, 80, 0);
+  const opacity = clampNumber(displaySettings.imageShadowOpacity, 0, 1, 0.18);
+  const color = hexToRgba(displaySettings.imageShadowColor, opacity);
+  return `${x}px ${y}px ${blur}px ${spread}px ${color}`;
+}
+
+function hexToRgba(hex, opacity) {
+  const normalized = String(hex || '').trim().replace('#', '');
+  const fullHex = normalized.length === 3
+    ? normalized.split('').map((char) => char + char).join('')
+    : normalized;
+
+  if (!/^[0-9a-fA-F]{6}$/.test(fullHex)) {
+    return `rgba(0, 0, 0, ${opacity})`;
+  }
+
+  const red = parseInt(fullHex.slice(0, 2), 16);
+  const green = parseInt(fullHex.slice(2, 4), 16);
+  const blue = parseInt(fullHex.slice(4, 6), 16);
+  return `rgba(${red}, ${green}, ${blue}, ${opacity})`;
 }
 
 function assignHeadingIds(doc) {
@@ -180,12 +269,12 @@ function applyStandalonePreStyles(doc, style) {
   });
 }
 
-function applyCodeBlockStyles(doc, style, codeTheme) {
+function applyCodeBlockStyles(doc, style, codeTheme, fontScale = 1) {
   const blocks = doc.querySelectorAll('[data-code-block="true"]');
   if (blocks.length === 0) return;
 
   const resolvedStyles = codeTheme
-    ? buildCodeThemeStyles(codeTheme)
+    ? buildCodeThemeStyles(codeTheme, fontScale)
     : buildThemeCodeBlockStyles(style);
 
   blocks.forEach((block) => {
@@ -204,11 +293,12 @@ function applyCodeBlockStyles(doc, style, codeTheme) {
   });
 }
 
-function buildCodeThemeStyles(codeTheme) {
+function buildCodeThemeStyles(codeTheme, fontScale = 1) {
+  const scaledFontSize = `${Number((14 * fontScale).toFixed(2)).toString()}px`;
   return {
     block: 'margin: 24px 0;',
     pre: `margin: 0; padding: 16px; overflow-x: auto; background: ${codeTheme.bg}; border: 1px solid ${codeTheme.borderColor}; border-radius: 10px; box-shadow: 0 2px 8px rgba(0,0,0,0.12); -webkit-box-shadow: 0 2px 8px rgba(0,0,0,0.12);`,
-    code: `display: block; margin: 0; background: transparent; color: ${codeTheme.textColor}; font-family: 'SF Mono', Monaco, 'Cascadia Code', Consolas, monospace; font-size: 14px; line-height: 1.7; white-space: pre; tab-size: 2;`
+    code: `display: block; margin: 0; background: transparent; color: ${codeTheme.textColor}; font-family: 'SF Mono', Monaco, 'Cascadia Code', Consolas, monospace; font-size: ${scaledFontSize}; line-height: 1.7; white-space: pre; tab-size: 2;`
   };
 }
 

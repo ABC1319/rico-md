@@ -8,5 +8,6 @@ dist/
 *.swp
 *.swo
 *~
+docs/
 docs/DESIGN
 docs/THEMES

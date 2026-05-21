@@ -19,7 +19,7 @@ import {
 } from './ui/code-themes.js';
 import { createToast } from './ui/toast.js';
 import { createPanelManager } from './ui/panel-manager.js';
-import { loadPreferences, savePreferences, debounceSaveContent, getDefaultCodeBlockSettings } from './storage/preferences.js';
+import { loadPreferences, savePreferences, debounceSaveContent, getDefaultCodeBlockSettings, getDefaultDisplaySettings } from './storage/preferences.js';
 import { STYLES } from '../styles/themes/index.js';
 
 const { createApp, ref, watch, nextTick, onMounted, computed } = window.Vue;
@@ -55,10 +55,27 @@ const editorWidth = ref(null);
 const rightPanelWidth = ref(null);
 const syncScrollEnabled = ref(true);
 const codeBlockSettings = ref(getDefaultCodeBlockSettings());
+const displaySettings = ref(getDefaultDisplaySettings());
 const editorSelection = ref({ start: 0, end: 0 });
 
 const categorizedThemes = ref(getCategorizedThemes());
 const codeThemeList = getCodeThemeList();
+const fontScaleOptions = [
+  { label: '更小', value: 0.75, meta: '0.75x' },
+  { label: '稍小', value: 0.85, meta: '0.85x' },
+  { label: '推荐', value: 1, meta: '1.0x' },
+  { label: '稍大', value: 1.15, meta: '1.15x' },
+  { label: '更大', value: 1.3, meta: '1.3x' },
+  { label: '超大', value: 1.5, meta: '1.5x' }
+];
+const imageStyleModeOptions = [
+  { label: '默认', value: 'theme', meta: '跟随主题' },
+  { label: '自定义', value: 'custom', meta: '覆盖样式' }
+];
+const imageRadiusModeOptions = [
+  { label: '圆角', value: 'px' },
+  { label: '圆形', value: 'circle' }
+];
 
 const toast = createToast(() => { toastState.value = toast.getState(); });
 const panelManager = createPanelManager(() => { activePanel.value = panelManager.getActivePanel(); });
@@ -91,6 +108,9 @@ const filteredDocuments = computed(() => {
       return a.createdAt - b.createdAt;
     });
 });
+
+const isImageStyleCustom = computed(() => displaySettings.value.imageStyleMode === 'custom');
+const isBodyLineHeightCustom = computed(() => displaySettings.value.bodyLineHeight != null);
 
 const tocItems = computed(() => {
   if (!renderedContent.value) return [];
@@ -240,7 +260,8 @@ function buildSavePayload() {
     documents: documents.value,
     activeDocumentId: activeDocumentId.value,
     codeBlockSettings: codeBlockSettings.value,
-    tocVisible: tocVisible.value
+    tocVisible: tocVisible.value,
+    displaySettings: displaySettings.value
   };
 }
 
@@ -263,7 +284,8 @@ function persistDocumentState() {
     documents.value,
     activeDocumentId.value,
     codeBlockSettings.value,
-    tocVisible.value
+    tocVisible.value,
+    displaySettings.value
   );
 
   if (success) {
@@ -339,7 +361,8 @@ async function renderMarkdown() {
       md,
       imageStore,
       styleConfig,
-      codeTheme: getResolvedCodeTheme()
+      codeTheme: getResolvedCodeTheme(),
+      displaySettings: displaySettings.value
     });
   } catch (error) {
     console.error('渲染失败:', error);
@@ -681,6 +704,85 @@ function selectCodeTheme(key) {
     // ignore
   }
   renderMarkdown();
+}
+
+function clampNumber(value, min, max, fallback, precision = 0) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return fallback;
+  const clamped = Math.min(max, Math.max(min, number));
+  if (precision <= 0) return Math.round(clamped);
+  return Number(clamped.toFixed(precision));
+}
+
+function updateDisplaySettings(nextSettings) {
+  displaySettings.value = {
+    ...displaySettings.value,
+    ...nextSettings
+  };
+}
+
+function setFontScale(value) {
+  updateDisplaySettings({ fontScale: value });
+}
+
+function setBodyLineHeightMode(mode) {
+  if (mode === 'theme') {
+    updateDisplaySettings({ bodyLineHeight: null });
+    return;
+  }
+
+  if (mode === 'custom') {
+    updateDisplaySettings({
+      bodyLineHeight: displaySettings.value.bodyLineHeight ?? 1.75
+    });
+  }
+}
+
+function setBodyLineHeight(value) {
+  updateDisplaySettings({
+    bodyLineHeight: clampNumber(value, 1.2, 2.6, displaySettings.value.bodyLineHeight ?? 1.75, 2)
+  });
+}
+
+function setImageStyleMode(value) {
+  if (!['theme', 'custom'].includes(value)) return;
+  updateDisplaySettings({ imageStyleMode: value });
+}
+
+function updateImageDisplaySettings(nextSettings) {
+  updateDisplaySettings({
+    imageStyleMode: 'custom',
+    ...nextSettings
+  });
+}
+
+function updateImageMetric(field, value, min, max) {
+  updateImageDisplaySettings({
+    [field]: clampNumber(value, min, max, displaySettings.value[field] ?? min)
+  });
+}
+
+function setImageRadiusMode(value) {
+  if (!['px', 'circle'].includes(value)) return;
+  updateImageDisplaySettings({ imageRadiusMode: value });
+}
+
+function updateImageShadowOpacity(value) {
+  updateImageDisplaySettings({
+    imageShadowOpacity: clampNumber(
+      Number(value) / 100,
+      0,
+      1,
+      displaySettings.value.imageShadowOpacity ?? 0,
+      2
+    )
+  });
+}
+
+function updateImageShadowColor(value) {
+  const normalized = String(value || '').trim();
+  if (!/^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(normalized)) return;
+  updateImageDisplaySettings({ imageShadowColor: normalized });
 }
 
 function getTextarea() {
@@ -1050,12 +1152,18 @@ const app = createApp({
       persistDocumentState();
     }, { deep: true });
 
+    watch(displaySettings, () => {
+      renderMarkdown();
+      persistDocumentState();
+    }, { deep: true });
+
     onMounted(async () => {
       starredStyles.value = getStarredStyles();
 
       const preferences = loadPreferences();
       currentStyle.value = preferences.currentStyle;
       codeBlockSettings.value = preferences.codeBlockSettings;
+      displaySettings.value = preferences.displaySettings;
       tocVisible.value = preferences.tocVisible;
 
       try {
@@ -1108,6 +1216,8 @@ const app = createApp({
       currentDocumentTitle,
       documentSearch,
       filteredDocuments,
+      isBodyLineHeightCustom,
+      isImageStyleCustom,
       previewMode,
       tocVisible,
       tocItems,
@@ -1127,7 +1237,11 @@ const app = createApp({
       rightPanelWidth,
       categorizedThemes,
       codeThemeList,
+      fontScaleOptions,
+      imageStyleModeOptions,
+      imageRadiusModeOptions,
       codeBlockSettings,
+      displaySettings,
       STYLES,
       renderMarkdown,
       toggleToc,
@@ -1146,6 +1260,14 @@ const app = createApp({
       selectTheme,
       toggleStar,
       selectCodeTheme,
+      setImageStyleMode,
+      setFontScale,
+      setBodyLineHeightMode,
+      setBodyLineHeight,
+      setImageRadiusMode,
+      updateImageMetric,
+      updateImageShadowOpacity,
+      updateImageShadowColor,
       handleKeydown,
       syncEditorSelection,
       insertHeading,

@@ -64,8 +64,14 @@ function convertGridToTable(doc) {
 
 function convertSingleGridToTable(doc, grid, columns) {
   const wrappers = Array.from(grid.children);
+  const gridStyle = grid.getAttribute('style') || '';
+  const gridMarginTop = extractStyleValue(gridStyle, 'margin-top') || '20px';
+  const gridMarginBottom = extractStyleValue(gridStyle, 'margin-bottom') || '20px';
   const table = doc.createElement('table');
-  table.setAttribute('style', 'width: 100% !important; border-collapse: collapse !important; margin: 20px auto !important; table-layout: fixed !important; border: none !important;');
+  table.setAttribute(
+    'style',
+    `width: 100% !important; border-collapse: collapse !important; margin-top: ${gridMarginTop} !important; margin-right: auto !important; margin-bottom: ${gridMarginBottom} !important; margin-left: auto !important; table-layout: fixed !important; border: none !important;`
+  );
 
   const rows = Math.ceil(wrappers.length / columns);
 
@@ -80,11 +86,22 @@ function convertSingleGridToTable(doc, grid, columns) {
       if (item) {
         const image = item.querySelector('img');
         if (image) {
+          const itemStyle = item.getAttribute('style') || '';
+          const imageStyle = image.getAttribute('style') || '';
+          const borderRadius = extractStyleValue(itemStyle, 'border-radius')
+            || extractStyleValue(imageStyle, 'border-radius')
+            || '4px';
+          const boxShadow = extractStyleValue(itemStyle, 'box-shadow')
+            || extractStyleValue(imageStyle, 'box-shadow')
+            || 'none';
           const nextImage = image.cloneNode(true);
-          nextImage.setAttribute('style', 'max-width: calc(100% - 20px) !important; max-height: 340px !important; width: auto !important; height: auto !important; display: inline-block !important; margin: 0 auto !important; border-radius: 4px !important; object-fit: contain !important;');
+          nextImage.setAttribute('style', 'max-width: calc(100% - 20px) !important; max-height: 340px !important; width: auto !important; height: auto !important; display: inline-block !important; margin: 0 auto !important; border-radius: 0 !important; box-shadow: none !important; object-fit: contain !important;');
 
           const wrapper = doc.createElement('div');
-          wrapper.setAttribute('style', 'width: 100% !important; height: 360px !important; text-align: center !important; background-color: #f5f5f5 !important; border-radius: 4px !important; padding: 10px !important; box-sizing: border-box !important; overflow: hidden !important; display: table !important;');
+          wrapper.setAttribute(
+            'style',
+            `width: 100% !important; height: 360px !important; text-align: center !important; background-color: #f5f5f5 !important; border-radius: ${borderRadius} !important; box-shadow: ${boxShadow} !important; padding: 10px !important; box-sizing: border-box !important; overflow: hidden !important; display: table !important;`
+          );
 
           const inner = doc.createElement('div');
           inner.setAttribute('style', 'display: table-cell !important; vertical-align: middle !important; text-align: center !important;');
