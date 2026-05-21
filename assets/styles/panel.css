@@ -408,37 +408,6 @@
   font-family: var(--font-mono);
 }
 
-.misc-inline-actions {
-  display: inline-flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.mini-toggle-btn {
-  border: 1px solid rgba(148, 163, 184, 0.24);
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.92);
-  color: var(--color-text-secondary);
-  padding: 6px 10px;
-  font-size: 12px;
-  line-height: 1;
-  cursor: pointer;
-  transition: border-color var(--motion-instant), background var(--motion-instant), color var(--motion-instant), box-shadow var(--motion-instant);
-}
-
-.mini-toggle-btn:hover {
-  border-color: var(--color-accent);
-  color: var(--color-text-primary);
-}
-
-.mini-toggle-btn.active {
-  border-color: rgba(52, 120, 246, 0.24);
-  background: rgba(234, 243, 255, 0.98);
-  color: var(--color-accent);
-  box-shadow: 0 0 0 1px rgba(52, 120, 246, 0.12);
-}
-
 .misc-range-input {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 76px;

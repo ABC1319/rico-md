@@ -69,7 +69,6 @@ function applyInlineStyles(html, styleConfig, codeTheme, displaySettings) {
   normalizeTableOverflow(doc);
   applyInlineCodeStyles(doc, scaledStyle);
   applyStandalonePreStyles(doc, scaledStyle);
-  applyBodyLineHeightSettings(doc, displaySettings);
   applyCodeBlockStyles(doc, scaledStyle, codeTheme, fontScale);
   applyCodeHighlighting(doc, { codeTheme, styleConfig });
   applyImageDisplaySettings(doc, displaySettings);
@@ -121,15 +120,6 @@ function applyImageDisplaySettings(doc, displaySettings) {
         appendStyleText(img, 'border-radius: 0 !important; box-shadow: none !important;');
       }
     });
-  });
-}
-
-function applyBodyLineHeightSettings(doc, displaySettings) {
-  const lineHeight = Number(displaySettings?.bodyLineHeight);
-  if (!Number.isFinite(lineHeight)) return;
-
-  doc.querySelectorAll('p, li, blockquote, td, th').forEach((element) => {
-    appendStyleText(element, `line-height: ${lineHeight} !important;`);
   });
 }
 

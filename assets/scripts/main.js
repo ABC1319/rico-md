@@ -110,7 +110,6 @@ const filteredDocuments = computed(() => {
 });
 
 const isImageStyleCustom = computed(() => displaySettings.value.imageStyleMode === 'custom');
-const isBodyLineHeightCustom = computed(() => displaySettings.value.bodyLineHeight != null);
 
 const tocItems = computed(() => {
   if (!renderedContent.value) return [];
@@ -725,25 +724,6 @@ function setFontScale(value) {
   updateDisplaySettings({ fontScale: value });
 }
 
-function setBodyLineHeightMode(mode) {
-  if (mode === 'theme') {
-    updateDisplaySettings({ bodyLineHeight: null });
-    return;
-  }
-
-  if (mode === 'custom') {
-    updateDisplaySettings({
-      bodyLineHeight: displaySettings.value.bodyLineHeight ?? 1.75
-    });
-  }
-}
-
-function setBodyLineHeight(value) {
-  updateDisplaySettings({
-    bodyLineHeight: clampNumber(value, 1.2, 2.6, displaySettings.value.bodyLineHeight ?? 1.75, 2)
-  });
-}
-
 function setImageStyleMode(value) {
   if (!['theme', 'custom'].includes(value)) return;
   updateDisplaySettings({ imageStyleMode: value });
@@ -1216,7 +1196,6 @@ const app = createApp({
       currentDocumentTitle,
       documentSearch,
       filteredDocuments,
-      isBodyLineHeightCustom,
       isImageStyleCustom,
       previewMode,
       tocVisible,
@@ -1262,8 +1241,6 @@ const app = createApp({
       selectCodeTheme,
       setImageStyleMode,
       setFontScale,
-      setBodyLineHeightMode,
-      setBodyLineHeight,
       setImageRadiusMode,
       updateImageMetric,
       updateImageShadowOpacity,

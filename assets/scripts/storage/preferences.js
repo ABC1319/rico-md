@@ -45,7 +45,6 @@ const LEGACY_IMAGE_SHADOW_MAP = {
 
 const DEFAULT_DISPLAY_SETTINGS = {
   fontScale: 1,
-  bodyLineHeight: null,
   imageStyleMode: 'theme',
   imageMarginTop: 24,
   imageMarginBottom: 32,
@@ -139,9 +138,6 @@ function normalizeDisplaySettings(settings) {
 
   return {
     fontScale: validScale,
-    bodyLineHeight: settings.bodyLineHeight == null
-      ? null
-      : clampNumber(settings.bodyLineHeight, 1.2, 2.6, 1.75, 2),
     imageStyleMode,
     imageMarginTop: clampNumber(
       settings.imageMarginTop,

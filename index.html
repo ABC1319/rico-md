@@ -376,51 +376,6 @@
                       <small>{{ option.meta }}</small>
                     </button>
                   </div>
-                  <div class="misc-setting-row">
-                    <div class="misc-range-header">
-                      <div class="misc-setting-label">正文行高</div>
-                      <div class="misc-inline-actions">
-                        <button
-                          class="mini-toggle-btn"
-                          :class="{ active: !isBodyLineHeightCustom }"
-                          @click="setBodyLineHeightMode('theme')"
-                        >
-                          跟随主题
-                        </button>
-                        <button
-                          class="mini-toggle-btn"
-                          :class="{ active: isBodyLineHeightCustom }"
-                          @click="setBodyLineHeightMode('custom')"
-                        >
-                          自定义
-                        </button>
-                        <span class="misc-range-value">
-                          {{ isBodyLineHeightCustom ? Number(displaySettings.bodyLineHeight).toFixed(2) : '主题默认' }}
-                        </span>
-                      </div>
-                    </div>
-                    <div class="misc-range-input">
-                      <input
-                        type="range"
-                        min="1.2"
-                        max="2.6"
-                        step="0.05"
-                        :value="displaySettings.bodyLineHeight ?? 1.75"
-                        :disabled="!isBodyLineHeightCustom"
-                        @input="setBodyLineHeight($event.target.value)"
-                      >
-                      <input
-                        class="misc-number-input"
-                        type="number"
-                        min="1.2"
-                        max="2.6"
-                        step="0.05"
-                        :value="displaySettings.bodyLineHeight ?? 1.75"
-                        :disabled="!isBodyLineHeightCustom"
-                        @input="setBodyLineHeight($event.target.value)"
-                      >
-                    </div>
-                  </div>
                   <p class="misc-panel-note">作用于容器、标题和正文等字号，复制到公众号与导出 HTML 会保留当前比例。</p>
                 </div>
 
